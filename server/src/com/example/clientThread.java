@@ -40,10 +40,9 @@ class clientThread implements Runnable
     		{
     			//Demo.CQ.sendPrivateMsg(Demo.adminQQ, "来自被控端[id:"+c.id+"]的消息:"+read.readLine());
     			try {
+    				Thread.sleep(1000);
     				os.write(heart.getBytes("GBK"));
     				os.flush();	//不缓存信息 直接发送
-					Thread.sleep(1000);
-					
 				} catch (InterruptedException e) {
 					// TODO 自动生成的 catch 块
 					e.printStackTrace();

